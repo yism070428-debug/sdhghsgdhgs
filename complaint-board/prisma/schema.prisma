@@ -1,0 +1,52 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Post {
+  id           String   @id @default(uuid())
+  title        String
+  content      String
+  authorName   String   @default("익명")
+  passwordHash String
+  category     String   @default("일반")
+  isSecret     Boolean  @default(false)
+  status       String   @default("WAITING") // WAITING, PROCESSING, COMPLETED, REJECTED
+  viewCount    Int      @default(0)
+  clientIpHash String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  answers      Answer[]
+
+  @@index([createdAt])
+  @@index([status])
+  @@index([category])
+}
+
+model Answer {
+  id         String   @id @default(uuid())
+  postId     String
+  post       Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  adminId    String?
+  admin      Admin?   @relation(fields: [adminId], references: [id], onDelete: SetNull)
+  authorName String   @default("관리자")
+  content    String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([postId])
+}
+
+model Admin {
+  id           String   @id @default(uuid())
+  username     String   @unique
+  passwordHash String
+  name         String   @default("운영팀")
+  createdAt    DateTime @default(now())
+  answers      Answer[]
+}
+

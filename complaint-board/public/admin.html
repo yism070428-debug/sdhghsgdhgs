@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>관리자 모드 - 불만/건의 관리</title>
+  <link rel="stylesheet" href="/style.css">
+  <style>
+    .admin-stat-summary {
+      background-color: #f8f8f8;
+      border: 1px solid #e0e0e0;
+      padding: 8px 14px;
+      font-size: 11px;
+      color: #555555;
+      display: flex;
+      gap: 16px;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    .admin-stat-summary strong {
+      color: #111111;
+    }
+  </style>
+</head>
+<body>
+  <div class="page-wrapper">
+    <!-- 상단 헤더 -->
+    <header class="board-header">
+      <div class="board-title-group">
+        <a href="/admin" class="board-title">불만 / 건의 관리자 모드</a>
+        <span class="board-subtitle">ADMINISTRATION</span>
+      </div>
+      <div class="header-links">
+        <a href="/" class="btn-classic">사용자 게시판</a>
+        <button id="logoutBtn" class="btn-classic" onclick="handleLogout()" style="display: none;">로그아웃</button>
+      </div>
+    </header>
+
+    <!-- 1. 미인증 시 로그인 폼 -->
+    <div id="loginSection" style="max-width: 360px; margin: 40px auto; border: 1px solid #b8b8b8; padding: 24px; background-color: #fafafa; display: none;">
+      <h3 style="font-size: 13px; font-weight: bold; margin-bottom: 12px; text-align: center; color: #333333;">
+        관리자 로그인
+      </h3>
+      <form onsubmit="handleLogin(event)">
+        <div style="margin-bottom: 8px;">
+          <label style="display: block; font-size: 11px; color: #555555; margin-bottom: 3px;">아이디</label>
+          <input type="text" id="loginUsername" class="form-classic-input" value="admin" required>
+        </div>
+        <div style="margin-bottom: 12px;">
+          <label style="display: block; font-size: 11px; color: #555555; margin-bottom: 3px;">비밀번호</label>
+          <input type="password" id="loginPassword" class="form-classic-input" placeholder="admin1234!" required>
+        </div>
+        <div id="loginError" style="color: #c9302c; font-size: 11px; margin-bottom: 8px; display: none;"></div>
+        <button type="submit" class="btn-classic btn-classic-primary" style="width: 100%; height: 26px;">
+          로그인
+        </button>
+      </form>
+    </div>
+
+    <!-- 2. 인증 완료 시 대시보드 메인 -->
+    <div id="dashboardSection" style="display: none;">
+      <!-- 통계 바 -->
+      <div class="admin-stat-summary">
+        <span>전체 접수: <strong id="statTotal">0</strong>건</span>
+        <span>|</span>
+        <span>접수대기: <strong id="statWaiting" style="color: #b86000;">0</strong>건</span>
+        <span>|</span>
+        <span>검토/처리중: <strong id="statProcessing" style="color: #0066cc;">0</strong>건</span>
+        <span>|</span>
+        <span>답변완료: <strong id="statCompleted" style="color: #008800;">0</strong>건</span>
+      </div>
+
+      <!-- 상단 검색 및 필터 -->
+      <div class="search-bar-container">
+        <div style="display: flex; gap: 8px; align-items: center;">
+          <select id="adminStatusSelect" class="classic-select" onchange="changeAdminFilter()">
+            <option value="ALL">전체 상태</option>
+            <option value="WAITING">접수대기</option>
+            <option value="PROCESSING">검토/처리중</option>
+            <option value="COMPLETED">답변완료</option>
+            <option value="REJECTED">보류/반려</option>
+          </select>
+          <select id="adminCategorySelect" class="classic-select" onchange="changeAdminFilter()">
+            <option value="전체">전체 분류</option>
+            <option value="서비스/응대">서비스/응대</option>
+            <option value="시스템/오류">시스템/오류</option>
+            <option value="시설/환경">시설/환경</option>
+            <option value="제안/건의">제안/건의</option>
+            <option value="기타">기타</option>
+          </select>
+        </div>
+
+        <div class="search-form-group">
+          <input type="text" id="adminSearchInput" class="classic-input" placeholder="검색어 입력">
+          <button class="btn-purple-search" onclick="triggerAdminSearch()">검색</button>
+        </div>
+      </div>
+
+      <!-- 관리 테이블 -->
+      <table class="classic-board-table">
+        <thead>
+          <tr>
+            <th style="width: 90px;">상태설정</th>
+            <th style="width: 90px;">분류</th>
+            <th class="th-title">제목 및 내용 (원문 전체)</th>
+            <th style="width: 100px;">작성자</th>
+            <th style="width: 90px;">등록일</th>
+            <th style="width: 130px;">관리</th>
+          </tr>
+        </thead>
+        <tbody id="adminPostsTableBody">
+          <tr>
+            <td colspan="6" style="text-align: center; padding: 25px; color: #888888;">
+              목록을 불러오는 중입니다...
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- 페이징 -->
+      <div id="adminPagination" class="classic-pagination"></div>
+    </div>
+  </div>
+
+  <!-- 공식 답변 작성 / 수정 모달 -->
+  <div id="answerModal" class="modal-overlay" style="display: none;">
+    <div class="classic-modal-box">
+      <div class="classic-modal-header">
+        <span>공식 답변 작성 / 수정</span>
+        <button class="classic-modal-close" onclick="closeModal('answerModal')">&times;</button>
+      </div>
+      <div class="classic-modal-body">
+        <div style="background-color: #f7f7f7; border: 1px solid #dddddd; padding: 8px 10px; margin-bottom: 12px; font-size: 11px;">
+          <div id="answerTargetTitle" style="font-weight: bold; color: #222222; margin-bottom: 4px;"></div>
+          <div id="answerTargetContent" style="color: #666666; max-height: 80px; overflow-y: auto; white-space: pre-wrap;"></div>
+        </div>
+
+        <form onsubmit="handleAnswerSubmit(event)">
+          <table class="form-table">
+            <tr>
+              <th>답변자 표시명</th>
+              <td>
+                <input type="text" id="answerAuthorInput" class="classic-input" style="width: 160px;" value="총괄운영팀" required>
+              </td>
+            </tr>
+            <tr>
+              <th>답변 내용 <span style="color: #c9302c;">*</span></th>
+              <td>
+                <textarea id="answerContentInput" class="form-classic-textarea" rows="8" placeholder="이용자에게 전달할 답변을 작성해주세요." required></textarea>
+              </td>
+            </tr>
+            <tr>
+              <th>답변 후 상태</th>
+              <td>
+                <select id="answerNextStatus" class="classic-select">
+                  <option value="COMPLETED" selected>답변완료</option>
+                  <option value="PROCESSING">검토/처리중</option>
+                  <option value="REJECTED">보류</option>
+                </select>
+              </td>
+            </tr>
+          </table>
+
+          <div id="answerError" style="color: #c9302c; font-size: 11px; margin-bottom: 8px; display: none;"></div>
+          <div style="display: flex; justify-content: flex-end; gap: 6px;">
+            <button type="button" class="btn-classic" onclick="closeModal('answerModal')">취소</button>
+            <button type="submit" id="saveAnswerBtn" class="btn-classic btn-classic-primary">답변 등록완료</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let currentAdmin = null;
+    let adminCurrentPage = 1;
+    let adminCurrentStatus = "ALL";
+    let adminCurrentCategory = "전체";
+    let adminSearchQuery = "";
+    let activePostIdForAnswer = null;
+
+    document.addEventListener("DOMContentLoaded", async () => {
+      await checkAdminAuth();
+      const input = document.getElementById("adminSearchInput");
+      if (input) {
+        input.addEventListener("keypress", (e) => {
+          if (e.key === "Enter") triggerAdminSearch();
+        });
+      }
+    });
+
+    async function checkAdminAuth() {
+      try {
+        const res = await fetch("/api/admin/me");
+        const data = await res.json();
+        if (data.authenticated) {
+          currentAdmin = data.admin;
+          showDashboard();
+          loadAdminPosts();
+        } else {
+          showLogin();
+        }
+      } catch {
+        showLogin();
+      }
+    }
+
+    function showLogin() {
+      document.getElementById("loginSection").style.display = "block";
+      document.getElementById("dashboardSection").style.display = "none";
+      document.getElementById("logoutBtn").style.display = "none";
+    }
+
+    function showDashboard() {
+      document.getElementById("loginSection").style.display = "none";
+      document.getElementById("dashboardSection").style.display = "block";
+      document.getElementById("logoutBtn").style.display = "inline-flex";
+    }
+
+    function changeAdminFilter() {
+      adminCurrentStatus = document.getElementById("adminStatusSelect").value;
+      adminCurrentCategory = document.getElementById("adminCategorySelect").value;
+      adminCurrentPage = 1;
+      loadAdminPosts();
+    }
+
+    function triggerAdminSearch() {
+      adminSearchQuery = document.getElementById("adminSearchInput").value.trim();
+      adminCurrentPage = 1;
+      loadAdminPosts();
+    }
+
+    async function handleLogin(e) {
+      e.preventDefault();
+      const errorDiv = document.getElementById("loginError");
+      errorDiv.style.display = "none";
+
+      const username = document.getElementById("loginUsername").value.trim();
+      const password = document.getElementById("loginPassword").value;
+
+      try {
+        const res = await fetch("/api/admin/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username, password }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "로그인 실패");
+
+        currentAdmin = data.admin;
+        showDashboard();
+        loadAdminPosts();
+      } catch (err) {
+        errorDiv.textContent = err.message;
+        errorDiv.style.display = "block";
+      }
+    }
+
+    async function handleLogout() {
+      await fetch("/api/admin/logout", { method: "POST" });
+      currentAdmin = null;
+      showLogin();
+    }
+
+    async function loadAdminPosts() {
+      const tbody = document.getElementById("adminPostsTableBody");
+      try {
+        const url = new URL("/api/admin/posts", window.location.origin);
+        url.searchParams.set("page", adminCurrentPage);
+        url.searchParams.set("limit", 15);
+        if (adminCurrentStatus !== "ALL") url.searchParams.set("status", adminCurrentStatus);
+        if (adminCurrentCategory !== "전체") url.searchParams.set("category", adminCurrentCategory);
+        if (adminSearchQuery) url.searchParams.set("search", adminSearchQuery);
+
+        const res = await fetch(url);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "불러오기 실패");
+
+        document.getElementById("statTotal").textContent = data.stats.total;
+        document.getElementById("statWaiting").textContent = data.stats.waiting;
+        document.getElementById("statProcessing").textContent = data.stats.processing;
+        document.getElementById("statCompleted").textContent = data.stats.completed;
+
+        if (data.posts.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 25px; color: #888888;">해당 조건의 게시글이 없습니다.</td></tr>`;
+          document.getElementById("adminPagination").innerHTML = "";
+          return;
+        }
+
+        tbody.innerHTML = data.posts.map((post) => {
+          const secretBadge = post.isSecret ? '<span style="color: #c9302c; font-weight: bold;">[비밀글] </span>' : '';
+          const hasAnswer = Boolean(post.answer);
+
+          return `
+            <tr>
+              <td style="text-align: center;">
+                <select onchange="updatePostStatus('${post.id}', this.value)" class="classic-select" style="font-size: 11px;">
+                  <option value="WAITING" ${post.status === "WAITING" ? "selected" : ""}>접수대기</option>
+                  <option value="PROCESSING" ${post.status === "PROCESSING" ? "selected" : ""}>검토중</option>
+                  <option value="COMPLETED" ${post.status === "COMPLETED" ? "selected" : ""}>답변완료</option>
+                  <option value="REJECTED" ${post.status === "REJECTED" ? "selected" : ""}>보류</option>
+                </select>
+              </td>
+              <td style="text-align: center; font-size: 11px; color: #666666;">[${escapeHtml(post.category)}]</td>
+              <td class="td-title" style="white-space: normal;">
+                <div style="font-weight: bold; margin-bottom: 2px;">
+                  ${secretBadge}${escapeHtml(post.title)}
+                </div>
+                <div style="font-size: 11px; color: #555555; line-height: 1.5;">${escapeHtml(post.content)}</div>
+                ${post.answer ? `
+                  <div style="margin-top: 4px; padding: 4px 6px; background-color: #f3f8fd; border-left: 2px solid #5b6982; font-size: 11px; color: #0b58a2;">
+                    <strong>↳ [RE] ${escapeHtml(post.answer.authorName)}:</strong> ${escapeHtml(post.answer.content)}
+                  </div>
+                ` : ''}
+              </td>
+              <td class="td-author">${escapeHtml(post.authorName)}</td>
+              <td class="td-date">${formatDate(post.createdAt)}</td>
+              <td style="text-align: center;">
+                <button class="btn-classic ${hasAnswer ? '' : 'btn-classic-primary'}" onclick='openAnswerModal(${JSON.stringify(post)})' style="font-size: 10px; padding: 1px 6px;">
+                  ${hasAnswer ? '답변수정' : '답변작성'}
+                </button>
+                <button class="btn-classic btn-classic-danger" onclick="adminDeletePost('${post.id}')" style="font-size: 10px; padding: 1px 6px;">
+                  삭제
+                </button>
+              </td>
+            </tr>
+          `;
+        }).join("");
+
+        renderAdminPagination(data.pagination);
+      } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: #c9302c; padding: 20px;">${err.message}</td></tr>`;
+      }
+    }
+
+    async function updatePostStatus(postId, newStatus) {
+      try {
+        const res = await fetch(`/api/admin/posts/${postId}/status`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: newStatus }),
+        });
+        if (!res.ok) throw new Error("상태 변경 실패");
+        loadAdminPosts();
+      } catch (err) {
+        alert(err.message);
+        loadAdminPosts();
+      }
+    }
+
+    function openAnswerModal(post) {
+      activePostIdForAnswer = post.id;
+      document.getElementById("answerTargetTitle").textContent = (post.isSecret ? "[비밀글] " : "") + post.title;
+      document.getElementById("answerTargetContent").textContent = post.content;
+      document.getElementById("answerContentInput").value = post.answer ? post.answer.content : "";
+      document.getElementById("answerAuthorInput").value = post.answer?.authorName || (currentAdmin?.name || "총괄운영팀");
+      document.getElementById("answerNextStatus").value = post.status === "WAITING" ? "COMPLETED" : post.status;
+      document.getElementById("answerError").style.display = "none";
+      document.getElementById("answerModal").style.display = "flex";
+    }
+
+    async function handleAnswerSubmit(e) {
+      e.preventDefault();
+      const errorDiv = document.getElementById("answerError");
+      const saveBtn = document.getElementById("saveAnswerBtn");
+      errorDiv.style.display = "none";
+
+      const content = document.getElementById("answerContentInput").value.trim();
+      const authorName = document.getElementById("answerAuthorInput").value.trim();
+      const nextStatus = document.getElementById("answerNextStatus").value;
+
+      if (!content) {
+        errorDiv.textContent = "답변 내용을 입력해주세요.";
+        errorDiv.style.display = "block";
+        return;
+      }
+
+      saveBtn.disabled = true;
+      try {
+        const res = await fetch(`/api/admin/posts/${activePostIdForAnswer}/answer`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ content, authorName, nextStatus }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "답변 등록 실패");
+
+        closeModal("answerModal");
+        loadAdminPosts();
+      } catch (err) {
+        errorDiv.textContent = err.message;
+        errorDiv.style.display = "block";
+      } finally {
+        saveBtn.disabled = false;
+      }
+    }
+
+    async function adminDeletePost(postId) {
+      if (!confirm("해당 게시글과 등록된 공식 답변을 삭제하시겠습니까?")) return;
+      try {
+        const res = await fetch(`/api/posts/${postId}`, { method: "DELETE" });
+        if (!res.ok) throw new Error("삭제 실패");
+        loadAdminPosts();
+      } catch (err) {
+        alert(err.message);
+      }
+    }
+
+    function renderAdminPagination(pagination) {
+      const container = document.getElementById("adminPagination");
+      if (!container) return;
+
+      const totalPages = pagination.totalPages;
+      const current = pagination.page;
+
+      if (totalPages <= 1) {
+        container.innerHTML = `<span class="current-page">1</span>`;
+        return;
+      }
+
+      let html = "";
+      for (let i = 1; i <= totalPages; i++) {
+        if (i > 1) html += `<span class="pipe">|</span>`;
+        if (i === current) {
+          html += `<span class="current-page">${i}</span>`;
+        } else {
+          html += `<a onclick="goToAdminPage(${i})">${i}</a>`;
+        }
+      }
+
+      if (current < totalPages) {
+        html += `<a class="next-link" onclick="goToAdminPage(${current + 1})">next ▷</a>`;
+      }
+
+      container.innerHTML = html;
+    }
+
+    function goToAdminPage(p) {
+      adminCurrentPage = p;
+      loadAdminPosts();
+    }
+
+    function closeModal(id) {
+      document.getElementById(id).style.display = "none";
+    }
+
+    function formatDate(dateStr) {
+      if (!dateStr) return "";
+      const d = new Date(dateStr);
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      return `${year}-${month}-${day}`;
+    }
+
+    function escapeHtml(str) {
+      if (!str) return "";
+      return str.replace(/[&<>'"]/g, 
+        tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag)
+      );
+    }
+  </script>
+</body>
+</html>

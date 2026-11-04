@@ -1,0 +1,14 @@
+{
+  "name": "complaint-board",
+  "version": "1.0.0",
+  "description": "익명 불만 접수 및 답변 게시판 시스템 (Zero-Dependency)",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "seed": "node scripts/seed.js"
+  },
+  "keywords": ["complaint", "anonymous", "board", "voc"],
+  "author": "",
+  "license": "MIT"
+}

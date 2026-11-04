@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>익명 불만 / 건의 접수 - 글쓰기</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div class="page-wrapper" style="max-width: 800px;">
+    <!-- 상단 헤더 -->
+    <header class="board-header">
+      <div class="board-title-group">
+        <a href="/" class="board-title">익명 불만 / 건의 접수</a>
+        <span class="board-subtitle">새 글 등록</span>
+      </div>
+      <div class="header-links">
+        <a href="/" class="btn-classic">← 목록보기</a>
+      </div>
+    </header>
+
+    <!-- 안내 문구 -->
+    <div style="background-color: #fcfcfc; border: 1px solid #e2e2e2; padding: 10px 14px; margin-bottom: 15px; font-size: 11px; color: #555555; line-height: 1.6;">
+      • 로그인 없이 누구나 익명으로 자유롭게 불만 및 건의사항을 등록하실 수 있습니다.<br>
+      • 본인 글의 수정/삭제 또는 비밀글 열람을 위해 <strong>비밀번호(4자리 이상)</strong>를 꼭 입력해주세요.
+    </div>
+
+    <!-- 글쓰기 폼 테이블 -->
+    <form id="writeForm" onsubmit="handlePostSubmit(event)">
+      <table class="form-table">
+        <tr>
+          <th>작성자 닉네임</th>
+          <td>
+            <input type="text" id="authorName" class="classic-input" value="익명" style="width: 150px;" maxlength="20">
+            <span style="font-size: 11px; color: #888888; margin-left: 6px;">(생략 시 '익명'으로 등록됩니다)</span>
+          </td>
+        </tr>
+        <tr>
+          <th>비밀번호 <span style="color: #c9302c;">*</span></th>
+          <td>
+            <input type="password" id="password" class="classic-input" style="width: 150px;" placeholder="4자리 이상" required minlength="4">
+            <span style="font-size: 11px; color: #888888; margin-left: 6px;">(글 수정/삭제 및 비밀글 조회용)</span>
+          </td>
+        </tr>
+        <tr>
+          <th>분류 <span style="color: #c9302c;">*</span></th>
+          <td>
+            <select id="category" class="classic-select" style="width: 150px;">
+              <option value="서비스/응대">서비스/응대</option>
+              <option value="시스템/오류">시스템/오류</option>
+              <option value="시설/환경">시설/환경</option>
+              <option value="제안/건의">제안/건의</option>
+              <option value="기타">기타</option>
+            </select>
+          </td>
+        </tr>
+        <tr>
+          <th>옵션</th>
+          <td>
+            <label style="cursor: pointer; font-size: 11px; color: #444444; display: inline-flex; align-items: center; gap: 4px;">
+              <input type="checkbox" id="isSecret">
+              <span>🔒 <strong>비밀글</strong> (작성자와 관리자만 열람 가능합니다)</span>
+            </label>
+          </td>
+        </tr>
+        <tr>
+          <th>제목 <span style="color: #c9302c;">*</span></th>
+          <td>
+            <input type="text" id="title" class="form-classic-input" placeholder="제목을 입력해주세요" required maxlength="100">
+          </td>
+        </tr>
+        <tr>
+          <th style="vertical-align: top; padding-top: 10px;">내용 <span style="color: #c9302c;">*</span></th>
+          <td>
+            <textarea id="content" class="form-classic-textarea" rows="12" placeholder="불만 또는 개선을 바라는 사항을 상세히 작성해주세요." required></textarea>
+          </td>
+        </tr>
+      </table>
+
+      <div id="formError" style="color: #c9302c; font-size: 11px; margin-bottom: 12px; display: none;"></div>
+
+      <!-- 하단 버튼 -->
+      <div style="display: flex; justify-content: center; gap: 8px; margin-top: 18px;">
+        <a href="/" class="btn-classic">취소</a>
+        <button type="submit" id="submitBtn" class="btn-classic btn-classic-primary" style="padding: 3px 18px;">
+          등록완료
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <script>
+    async function handlePostSubmit(e) {
+      e.preventDefault();
+      const formError = document.getElementById("formError");
+      const submitBtn = document.getElementById("submitBtn");
+      formError.style.display = "none";
+
+      const title = document.getElementById("title").value.trim();
+      const content = document.getElementById("content").value.trim();
+      const authorName = document.getElementById("authorName").value.trim() || "익명";
+      const password = document.getElementById("password").value;
+      const category = document.getElementById("category").value;
+      const isSecret = document.getElementById("isSecret").checked;
+
+      if (!title || !content || !password) {
+        formError.textContent = "필수 항목을 모두 입력해주세요.";
+        formError.style.display = "block";
+        return;
+      }
+
+      if (password.length < 4) {
+        formError.textContent = "비밀번호는 최소 4자리 이상이어야 합니다.";
+        formError.style.display = "block";
+        return;
+      }
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = "등록 중...";
+
+      try {
+        const res = await fetch("/api/posts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title,
+            content,
+            authorName,
+            password,
+            category,
+            isSecret,
+          }),
+        });
+
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error || "등록 실패");
+        }
+
+        alert("게시글이 성공적으로 등록되었습니다.");
+        window.location.href = "/";
+      } catch (err) {
+        formError.textContent = err.message;
+        formError.style.display = "block";
+        submitBtn.disabled = false;
+        submitBtn.textContent = "등록완료";
+      }
+    }
+  </script>
+</body>
+</html>
